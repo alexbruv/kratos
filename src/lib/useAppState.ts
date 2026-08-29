@@ -5,14 +5,26 @@ import { findNewlyUnlocked, generateCustomMilestoneId } from "./milestones";
 import { createInitialState, loadState, saveState } from "./storage";
 import { currentStreak, getDayState, longestStreak, totalDaysLogged } from "./streak";
 import type { DayState } from "./streak";
+import {
+  adoptDeviceId,
+  fetchRemoteState,
+  getOrCreateDeviceId,
+  mergeStates,
+  pushRemoteState,
+  statesEqual,
+} from "./sync";
 import type { AppState, Milestone } from "./types";
 import { FREEZE_BANK_CAP } from "./types";
+
+export type SyncStatus = "idle" | "syncing" | "synced" | "offline" | "error";
 
 export function useAppState() {
   const [state, setState] = useState<AppState>(() => loadState());
   const [today, setToday] = useState(() => todayStr());
   const [freezeToastOpen, setFreezeToastOpen] = useState(false);
   const [celebrationQueue, setCelebrationQueue] = useState<Milestone[]>([]);
+  const [deviceId, setDeviceId] = useState<string>(() => getOrCreateDeviceId());
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
 
   // Keep "today" fresh across a real midnight rollover in a long-lived tab.
   useEffect(() => {
@@ -53,15 +65,102 @@ export function useAppState() {
     [checkInDates, freezeUsedDates, today],
   );
 
-  // Persist the canonical snapshot (including the freshly-reconciled freeze fields) on any change.
-  useEffect(() => {
-    saveState({
+  // The full snapshot — local state plus the freshly-reconciled freeze fields — used for
+  // localStorage persistence, export, and Blobs sync alike.
+  const canonicalState = useMemo<AppState>(
+    () => ({
       ...state,
       freezeBank: freeze.freezeBank,
       freezeUsedDates: freeze.freezeUsedDates,
       lastEvaluatedWeek: freeze.lastEvaluatedWeek,
-    });
-  }, [state, freeze]);
+    }),
+    [state, freeze],
+  );
+
+  useEffect(() => {
+    saveState(canonicalState);
+  }, [canonicalState]);
+
+  // Refs so the sync effects below can read the latest local/canonical state without
+  // depending on it (which would re-run the pull-and-merge cycle on every check-in).
+  const canonicalStateRef = useRef(canonicalState);
+  useEffect(() => {
+    canonicalStateRef.current = canonicalState;
+  }, [canonicalState]);
+
+  // Gates the "push on change" effect until the initial pull+merge for this deviceId has
+  // finished, so a stale pre-merge write can never race ahead of it and clobber the remote.
+  const hasInitialSyncedRef = useRef(false);
+
+  // Pull this device's remote blob, merge it into local (never destructive — union of
+  // check-ins and milestones), then push the merged result back up. Runs on mount and again
+  // whenever the user adopts a different sync id from Settings.
+  useEffect(() => {
+    let cancelled = false;
+    hasInitialSyncedRef.current = false;
+    setSyncStatus("syncing");
+
+    (async () => {
+      const remote = await fetchRemoteState(deviceId);
+      if (cancelled) return;
+
+      // What we push is a best-effort snapshot from just before this point — if the user
+      // checked in during the fetch, that edit still lands locally (re-merged fresh inside
+      // the updater below, so it's never lost) and reaches the remote on the very next push.
+      const toPush = remote ? mergeStates(canonicalStateRef.current, remote) : canonicalStateRef.current;
+
+      if (remote) {
+        setState((prev) => {
+          const merged = mergeStates(prev, remote);
+          return statesEqual(prev, merged)
+            ? prev
+            : { ...prev, checkIns: merged.checkIns, milestones: merged.milestones };
+        });
+      }
+
+      const ok = await pushRemoteState(deviceId, toPush);
+      if (cancelled) return;
+      hasInitialSyncedRef.current = true;
+      setSyncStatus(ok ? "synced" : "offline");
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deviceId]);
+
+  // Push any subsequent local change up, debounced so a burst of updates (e.g. reconciling
+  // several days at once) doesn't fire a request per change.
+  useEffect(() => {
+    if (!hasInitialSyncedRef.current) return;
+    const timer = setTimeout(() => {
+      setSyncStatus("syncing");
+      pushRemoteState(deviceId, canonicalState).then((ok) => {
+        setSyncStatus(ok ? "synced" : "offline");
+      });
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [canonicalState, deviceId]);
+
+  // Retry immediately when connectivity returns, rather than waiting for the next local change.
+  useEffect(() => {
+    function handleOnline() {
+      if (!hasInitialSyncedRef.current) return;
+      setSyncStatus("syncing");
+      pushRemoteState(deviceId, canonicalStateRef.current).then((ok) => {
+        setSyncStatus(ok ? "synced" : "offline");
+      });
+    }
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [deviceId]);
+
+  const setSyncDeviceId = useCallback((id: string) => {
+    const trimmed = id.trim();
+    if (!trimmed) return;
+    adoptDeviceId(trimmed);
+    setDeviceId(trimmed);
+  }, []);
 
   // Surface a one-time toast whenever the freeze bank increases after the initial load.
   const prevBankRef = useRef<number | null>(null);
@@ -160,17 +259,8 @@ export function useAppState() {
   }, []);
 
   const exportData = useCallback((): string => {
-    return JSON.stringify(
-      {
-        ...state,
-        freezeBank: freeze.freezeBank,
-        freezeUsedDates: freeze.freezeUsedDates,
-        lastEvaluatedWeek: freeze.lastEvaluatedWeek,
-      },
-      null,
-      2,
-    );
-  }, [state, freeze]);
+    return JSON.stringify(canonicalState, null, 2);
+  }, [canonicalState]);
 
   const importData = useCallback((json: string): boolean => {
     try {
@@ -221,5 +311,8 @@ export function useAppState() {
     exportData,
     importData,
     resetData,
+    deviceId,
+    syncStatus,
+    setSyncDeviceId,
   };
 }

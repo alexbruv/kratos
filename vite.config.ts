@@ -5,6 +5,14 @@ import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    // Lets `npm run dev` talk to the sync API when it's served separately via
+    // `netlify functions:serve` (useful when `netlify dev`'s Edge Functions bootstrap
+    // isn't available, e.g. offline/sandboxed). Not needed when running under `netlify dev`.
+    proxy: {
+      '/api': 'http://localhost:9999',
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),

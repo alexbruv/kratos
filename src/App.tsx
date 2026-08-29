@@ -60,6 +60,9 @@ function App() {
           onExport={app.exportData}
           onImport={app.importData}
           onReset={app.resetData}
+          deviceId={app.deviceId}
+          syncStatus={app.syncStatus}
+          onSetSyncDeviceId={app.setSyncDeviceId}
         />
       )}
 
