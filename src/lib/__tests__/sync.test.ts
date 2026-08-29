@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { mergeStates, statesEqual } from "../sync";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { fetchRemoteState, mergeStates, statesEqual } from "../sync";
 import type { AppState } from "../types";
 
 function state(overrides: Partial<AppState> = {}): AppState {
   return {
     checkIns: [],
+    extraWorkouts: [],
     milestones: [],
     deletedMilestoneIds: [],
     freezeBank: 0,
@@ -156,6 +157,25 @@ describe("mergeStates", () => {
     const remote = state({ theme: "light" });
     expect(mergeStates(local, remote).theme).toBe("dark");
   });
+
+  it("unions extra workouts by id, keeping several entries on the same date distinct", () => {
+    const local = state({
+      extraWorkouts: [
+        { id: "a", date: "2026-08-01" },
+        { id: "b", date: "2026-08-01" },
+      ],
+    });
+    const remote = state({ extraWorkouts: [{ id: "c", date: "2026-08-01" }] });
+    const merged = mergeStates(local, remote);
+    expect(merged.extraWorkouts.map((w) => w.id).sort()).toEqual(["a", "b", "c"]);
+  });
+
+  it("doesn't duplicate an extra workout entry that round-tripped through both sides", () => {
+    const shared = { id: "a", date: "2026-08-01" };
+    const local = state({ extraWorkouts: [shared] });
+    const remote = state({ extraWorkouts: [shared] });
+    expect(mergeStates(local, remote).extraWorkouts).toHaveLength(1);
+  });
 });
 
 describe("statesEqual", () => {
@@ -195,5 +215,39 @@ describe("statesEqual", () => {
     const a = state({ deletedMilestoneIds: [] });
     const b = state({ deletedMilestoneIds: ["d3"] });
     expect(statesEqual(a, b)).toBe(false);
+  });
+});
+
+describe("fetchRemoteState", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("defaults a missing extraWorkouts field on an older stored payload instead of crashing later in mergeStates", async () => {
+    const legacyPayload = {
+      checkIns: [{ date: "2026-08-01" }],
+      milestones: [],
+      deletedMilestoneIds: [],
+      freezeBank: 0,
+      freezeUsedDates: [],
+      theme: "light",
+      // no extraWorkouts field at all — this is what a pre-feature blob looks like.
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(legacyPayload), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    const remote = await fetchRemoteState();
+    expect(remote?.extraWorkouts).toEqual([]);
+
+    // The actual regression this guards: merging must not throw on the missing field.
+    const local = state({ extraWorkouts: [{ id: "a", date: "2026-08-02" }] });
+    expect(() => mergeStates(local, remote as AppState)).not.toThrow();
   });
 });

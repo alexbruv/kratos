@@ -11,8 +11,11 @@ interface HomeProps {
   longestStreakDays: number;
   totalDays: number;
   freezeBank: number;
+  extraWorkoutsToday: number;
   dayState: (date: string) => DayState;
   onMarkDone: () => void;
+  onAddExtraWorkout: () => void;
+  onRemoveExtraWorkout: () => void;
   nextMilestoneDays?: number;
   nextMilestoneLabel?: string;
 }
@@ -24,8 +27,11 @@ export function Home({
   longestStreakDays,
   totalDays,
   freezeBank,
+  extraWorkoutsToday,
   dayState,
   onMarkDone,
+  onAddExtraWorkout,
+  onRemoveExtraWorkout,
   nextMilestoneDays,
   nextMilestoneLabel,
 }: HomeProps) {
@@ -112,6 +118,35 @@ export function Home({
           <p className="font-body text-[11px] font-semibold uppercase tracking-wide text-text-muted">
             Total workouts
           </p>
+        </div>
+      </div>
+
+      <div className="relative z-10 mt-3 flex items-center justify-between rounded-xl border-[3px] border-border bg-surface px-3 py-2">
+        <div>
+          <p className="font-body text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+            Extra workouts today
+          </p>
+          <p className="font-display text-xl text-blue">{extraWorkoutsToday}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {extraWorkoutsToday > 0 && (
+            <button
+              type="button"
+              onClick={onRemoveExtraWorkout}
+              aria-label="Remove last extra workout logged today"
+              className="flex h-8 w-8 items-center justify-center rounded-full border-[3px] border-border bg-bg font-display text-base text-text"
+            >
+              −
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onAddExtraWorkout}
+            aria-label="Log an extra workout"
+            className="flex h-8 w-8 items-center justify-center rounded-full border-[3px] border-border bg-blue font-display text-base text-white"
+          >
+            +
+          </button>
         </div>
       </div>
 

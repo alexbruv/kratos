@@ -1,3 +1,4 @@
+import { milestoneMetric } from "../lib/milestones";
 import { BadgeIcon } from "./BadgeIcon";
 import { MemphisConfetti } from "./MemphisConfetti";
 import type { Milestone } from "../lib/types";
@@ -9,6 +10,8 @@ export function CelebrationOverlay({
   milestone: Milestone;
   onDismiss: () => void;
 }) {
+  const unitLabel = milestoneMetric(milestone) === "extraWorkouts" ? "extra workouts" : "day streak";
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-bg px-6 text-center animate-[celebration-in_0.35s_ease-out]">
       <MemphisConfetti
@@ -38,7 +41,7 @@ export function CelebrationOverlay({
         )}
 
         <p className="mt-6 font-display text-6xl text-red">{milestone.days}</p>
-        <p className="font-body text-sm font-semibold text-text-muted">day streak</p>
+        <p className="font-body text-sm font-semibold text-text-muted">{unitLabel}</p>
 
         <button
           type="button"

@@ -5,6 +5,7 @@ import { seedBuiltinMilestones } from "./milestones";
 export function createInitialState(): AppState {
   return {
     checkIns: [],
+    extraWorkouts: [],
     milestones: seedBuiltinMilestones(),
     deletedMilestoneIds: [],
     freezeBank: 0,

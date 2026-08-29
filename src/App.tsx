@@ -30,8 +30,11 @@ function App() {
           longestStreakDays={app.longestStreakDays}
           totalDays={app.totalDays}
           freezeBank={app.freezeBank}
+          extraWorkoutsToday={app.extraWorkoutsToday}
           dayState={app.dayState}
           onMarkDone={app.markTodayDone}
+          onAddExtraWorkout={app.addExtraWorkout}
+          onRemoveExtraWorkout={app.removeLastExtraWorkoutToday}
           nextMilestoneDays={next?.days}
           nextMilestoneLabel={next?.label}
         />
@@ -48,6 +51,7 @@ function App() {
         <Rewards
           milestones={app.milestones}
           currentStreakDays={app.currentStreakDays}
+          totalExtraWorkouts={app.totalExtraWorkouts}
           onAdd={app.addCustomReward}
           onEdit={app.editReward}
           onDelete={app.deleteReward}

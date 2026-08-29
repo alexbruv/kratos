@@ -1,4 +1,4 @@
-import type { Milestone } from "./types";
+import type { Milestone, MilestoneMetric } from "./types";
 
 /** Editable config array, not hardcoded logic — retune the ladder here. */
 export const BUILTIN_MILESTONES: readonly Omit<Milestone, "unlockedAt">[] = [
@@ -16,27 +16,39 @@ export function seedBuiltinMilestones(): Milestone[] {
   return BUILTIN_MILESTONES.map((m) => ({ ...m }));
 }
 
+export function milestoneMetric(m: Pick<Milestone, "metric">): MilestoneMetric {
+  return m.metric ?? "streak";
+}
+
 export function sortMilestones(milestones: Milestone[]): Milestone[] {
   return [...milestones].sort((a, b) => a.days - b.days);
 }
 
-export function nextMilestone(
-  milestones: Milestone[],
-  currentStreakDays: number,
-): Milestone | undefined {
-  return sortMilestones(milestones).find((m) => !m.unlockedAt && m.days > currentStreakDays);
+export function milestonesForMetric(milestones: Milestone[], metric: MilestoneMetric): Milestone[] {
+  return sortMilestones(milestones.filter((m) => milestoneMetric(m) === metric));
 }
 
-/** Milestones crossed by currentStreakDays that aren't marked unlocked yet, ascending by day count. */
+export function nextMilestone(
+  milestones: Milestone[],
+  currentValue: number,
+  metric: MilestoneMetric = "streak",
+): Milestone | undefined {
+  return milestonesForMetric(milestones, metric).find((m) => !m.unlockedAt && m.days > currentValue);
+}
+
+/** Milestones crossed by their metric's current value that aren't unlocked yet, ascending by threshold. */
 export function findNewlyUnlocked(
   milestones: Milestone[],
   currentStreakDays: number,
+  totalExtraWorkouts: number,
 ): Milestone[] {
-  return sortMilestones(milestones).filter(
-    (m) => !m.unlockedAt && m.days <= currentStreakDays,
-  );
+  return sortMilestones(milestones).filter((m) => {
+    if (m.unlockedAt) return false;
+    const currentValue = milestoneMetric(m) === "extraWorkouts" ? totalExtraWorkouts : currentStreakDays;
+    return m.days <= currentValue;
+  });
 }
 
-export function generateCustomMilestoneId(): string {
-  return `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+export function generateId(): string {
+  return `id-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }

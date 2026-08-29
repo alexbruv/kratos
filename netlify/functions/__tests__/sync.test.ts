@@ -93,6 +93,42 @@ describe("sync function", () => {
     expect(res.status).toBe(400);
   });
 
+  it("accepts a body with a valid extraWorkouts array", async () => {
+    const res = await handler(
+      req(`http://x/api/sync?deviceId=${DEVICE_ID}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...VALID_STATE,
+          extraWorkouts: [{ id: "a", date: "2026-08-01" }],
+        }),
+      }),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects a malformed extraWorkouts entry", async () => {
+    const res = await handler(
+      req(`http://x/api/sync?deviceId=${DEVICE_ID}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...VALID_STATE, extraWorkouts: [{ date: "not-a-date" }] }),
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("accepts a legacy body with no extraWorkouts field at all (pre-feature payload shape)", async () => {
+    const res = await handler(
+      req(`http://x/api/sync?deviceId=${DEVICE_ID}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(VALID_STATE),
+      }),
+    );
+    expect(res.status).toBe(200);
+  });
+
   it("rejects a payload over the size limit", async () => {
     const res = await handler(
       req(`http://x/api/sync?deviceId=${DEVICE_ID}`, {

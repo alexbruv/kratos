@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { todayStr } from "./dates";
 import { reconcileFreezeState } from "./freeze";
-import { findNewlyUnlocked, generateCustomMilestoneId } from "./milestones";
+import { findNewlyUnlocked, generateId } from "./milestones";
 import { createInitialState, loadState, saveState } from "./storage";
 import { currentStreak, getDayState, longestStreak, totalDaysLogged } from "./streak";
 import type { DayState } from "./streak";
 import { fetchRemoteState, mergeStates, pushRemoteState, statesEqual } from "./sync";
-import type { AppState, Milestone } from "./types";
+import type { AppState, Milestone, MilestoneMetric } from "./types";
 import { FREEZE_BANK_CAP } from "./types";
 
 export type SyncStatus = "idle" | "syncing" | "synced" | "offline" | "error";
@@ -51,6 +51,7 @@ export function useAppState() {
     [checkInDates, freezeUsedDates, today],
   );
   const totalDays = useMemo(() => totalDaysLogged(checkInDates), [checkInDates]);
+  const totalExtraWorkouts = state.extraWorkouts.length;
 
   const dayState = useCallback(
     (date: string): DayState => getDayState(date, checkInDates, freezeUsedDates, today),
@@ -108,6 +109,7 @@ export function useAppState() {
             : {
                 ...prev,
                 checkIns: merged.checkIns,
+                extraWorkouts: merged.extraWorkouts,
                 milestones: merged.milestones,
                 deletedMilestoneIds: merged.deletedMilestoneIds,
               };
@@ -169,7 +171,7 @@ export function useAppState() {
   // effects can never enqueue the same milestone's celebration twice.
   const queuedMilestoneIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    const unlocked = findNewlyUnlocked(state.milestones, currentStreakDays).filter(
+    const unlocked = findNewlyUnlocked(state.milestones, currentStreakDays, totalExtraWorkouts).filter(
       (m) => !queuedMilestoneIdsRef.current.has(m.id),
     );
     if (unlocked.length === 0) return;
@@ -184,7 +186,7 @@ export function useAppState() {
       ),
     }));
     setCelebrationQueue((q) => [...q, ...unlocked.map((m) => ({ ...m, unlockedAt: now }))]);
-  }, [currentStreakDays, state.milestones]);
+  }, [currentStreakDays, totalExtraWorkouts, state.milestones]);
 
   const markTodayDone = useCallback(() => {
     setState((prev) => {
@@ -193,22 +195,45 @@ export function useAppState() {
     });
   }, [today]);
 
+  // A second (or third...) workout the same day — logged separately from the streak-counting
+  // check-in above, so it never affects the streak.
+  const addExtraWorkout = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      extraWorkouts: [...prev.extraWorkouts, { id: generateId(), date: today }],
+    }));
+  }, [today]);
+
+  // Undo for a mis-tap — only ever removes one of today's own entries, never an earlier day's.
+  const removeLastExtraWorkoutToday = useCallback(() => {
+    setState((prev) => {
+      const lastIndex = prev.extraWorkouts.findLastIndex((w) => w.date === today);
+      if (lastIndex === -1) return prev;
+      return {
+        ...prev,
+        extraWorkouts: prev.extraWorkouts.filter((_, i) => i !== lastIndex),
+      };
+    });
+  }, [today]);
+
   const addCustomReward = useCallback(
-    (days: number, title: string, note?: string) => {
+    (days: number, title: string, note: string | undefined, metric: MilestoneMetric = "streak") => {
       setState((prev) => {
-        const alreadyAchieved = days <= currentStreakDays;
+        const currentValue = metric === "extraWorkouts" ? totalExtraWorkouts : currentStreakDays;
+        const alreadyAchieved = days <= currentValue;
         const milestone: Milestone = {
-          id: generateCustomMilestoneId(),
+          id: generateId(),
           days,
           label: title,
           note,
           source: "custom",
+          metric,
           unlockedAt: alreadyAchieved ? new Date().toISOString() : undefined,
         };
         return { ...prev, milestones: [...prev.milestones, milestone] };
       });
     },
-    [currentStreakDays],
+    [currentStreakDays, totalExtraWorkouts],
   );
 
   // Built-in or custom — every reward is editable, since this is a single-user app and the
@@ -290,6 +315,8 @@ export function useAppState() {
     currentStreakDays,
     longestStreakDays,
     totalDays,
+    totalExtraWorkouts,
+    extraWorkoutsToday: state.extraWorkouts.filter((w) => w.date === today).length,
     dayState,
     milestones: state.milestones,
     theme: state.theme ?? "light",
@@ -299,6 +326,8 @@ export function useAppState() {
     celebration: celebrationQueue[0] ?? null,
     dismissCelebration,
     markTodayDone,
+    addExtraWorkout,
+    removeLastExtraWorkoutToday,
     addCustomReward,
     editReward,
     deleteReward,

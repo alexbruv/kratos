@@ -21,6 +21,16 @@ function isValidCheckIn(c: unknown): c is { date: string } {
   );
 }
 
+function isValidExtraWorkout(w: unknown): w is { id: string; date: string } {
+  return (
+    typeof w === "object" &&
+    w !== null &&
+    typeof (w as { id?: unknown }).id === "string" &&
+    typeof (w as { date?: unknown }).date === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test((w as { date: string }).date)
+  );
+}
+
 function isValidMilestone(m: unknown): boolean {
   return (
     typeof m === "object" &&
@@ -33,14 +43,22 @@ function isValidMilestone(m: unknown): boolean {
   );
 }
 
-/** Minimal shape check — this is an unauthenticated endpoint (no accounts by design), so we don't
- * trust the body beyond "does this look like the AppState this app actually writes." */
-function isValidAppState(body: unknown): body is { checkIns: unknown[]; milestones: unknown[] } {
+/**
+ * Minimal shape check — this is an unauthenticated endpoint (no accounts by design), so we don't
+ * trust the body beyond "does this look like the AppState this app actually writes." Only
+ * checkIns and milestones are required, since older stored payloads (and this validator, applied
+ * only to new writes) predate extraWorkouts — the client normalizes a missing field to [] itself.
+ */
+function isValidAppState(
+  body: unknown,
+): body is { checkIns: unknown[]; extraWorkouts?: unknown[]; milestones: unknown[] } {
   if (typeof body !== "object" || body === null) return false;
-  const b = body as { checkIns?: unknown; milestones?: unknown };
+  const b = body as { checkIns?: unknown; extraWorkouts?: unknown; milestones?: unknown };
   return (
     Array.isArray(b.checkIns) &&
     b.checkIns.every(isValidCheckIn) &&
+    (b.extraWorkouts === undefined ||
+      (Array.isArray(b.extraWorkouts) && b.extraWorkouts.every(isValidExtraWorkout))) &&
     Array.isArray(b.milestones) &&
     b.milestones.every(isValidMilestone)
   );

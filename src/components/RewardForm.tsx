@@ -9,11 +9,15 @@ export interface RewardFormValues {
 export function RewardForm({
   initial,
   submitLabel,
+  thresholdLabel = "Days",
+  thresholdPlaceholder = "730",
   onSubmit,
   onCancel,
 }: {
   initial?: Partial<RewardFormValues>;
   submitLabel: string;
+  thresholdLabel?: string;
+  thresholdPlaceholder?: string;
   onSubmit: (values: RewardFormValues) => void;
   onCancel: () => void;
 }) {
@@ -34,7 +38,7 @@ export function RewardForm({
     >
       <label className="flex flex-col gap-1">
         <span className="font-body text-xs font-bold uppercase tracking-wide text-text-muted">
-          Days
+          {thresholdLabel}
         </span>
         <input
           type="number"
@@ -42,7 +46,7 @@ export function RewardForm({
           min={1}
           value={days}
           onChange={(e) => setDays(e.target.value)}
-          placeholder="730"
+          placeholder={thresholdPlaceholder}
           className="rounded-lg border-[3px] border-border bg-bg px-3 py-2 font-body text-base text-text outline-none"
         />
       </label>
