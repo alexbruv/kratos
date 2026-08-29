@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-display: "Archivo Black", "Poppins", system-ui, sans-serif;
+  --font-body: "Space Grotesk", "Inter", system-ui, sans-serif;
+
+  --color-bg: #faf6ee;
+  --color-surface: #ffffff;
+  --color-border: #1a1a1a;
+  --color-text: #1a1a1a;
+  --color-text-muted: #5c5648;
+  /* Fixed dark ink for text/icons sitting on a filled accent surface (e.g. a yellow chip) —
+     stays #1a1a1a in dark mode too, since --color-border there is deliberately light
+     (to read against the dark page background) and would fail contrast on yellow. */
+  --color-ink-on-accent: #1a1a1a;
+
+  --color-red: #d1352e;
+  --color-yellow: #f6c445;
+  --color-purple: #6e3fa3;
+  --color-blue: #2a63ce;
+
+  --shadow-hard-sm: 3px 3px 0 0 var(--color-border);
+  --shadow-hard: 5px 5px 0 0 var(--color-border);
+  --shadow-hard-lg: 8px 8px 0 0 var(--color-border);
+}
+
+.dark {
+  --color-bg: #1a1730;
+  --color-surface: #26213f;
+  --color-border: #746d9c;
+  --color-text: #f5f0e6;
+  --color-text-muted: #b5afd1;
+
+  --color-red: #e8493f;
+  --color-yellow: #f6c445;
+  --color-purple: #9b6fd6;
+  --color-blue: #5b8dee;
+}
+
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+@keyframes celebration-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
