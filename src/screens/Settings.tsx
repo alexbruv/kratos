@@ -24,40 +24,18 @@ export function Settings({
   onExport,
   onImport,
   onReset,
-  deviceId,
   syncStatus,
-  onSetSyncDeviceId,
 }: {
   theme: "light" | "dark";
   onSetTheme: (theme: "light" | "dark") => void;
   onExport: () => string;
   onImport: (json: string) => boolean;
   onReset: () => void;
-  deviceId: string;
   syncStatus: SyncStatus;
-  onSetSyncDeviceId: (id: string) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [confirmingReset, setConfirmingReset] = useState(false);
-  const [linkInput, setLinkInput] = useState("");
-  const [copied, setCopied] = useState(false);
-
-  function handleCopyId() {
-    navigator.clipboard
-      ?.writeText(deviceId)
-      .then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      })
-      .catch(() => {});
-  }
-
-  function handleLinkDevice() {
-    if (!linkInput.trim()) return;
-    onSetSyncDeviceId(linkInput.trim());
-    setLinkInput("");
-  }
 
   function handleExport() {
     const json = onExport();
@@ -121,39 +99,10 @@ export function Settings({
           </span>
         </div>
         <p className="mt-1 font-body text-sm text-text-muted">
-          Your data still lives on this device first — nothing here needs a connection. When
-          you're online, it also backs up to the cloud under this device's sync ID, so you can
-          carry your streak to another device by pasting the same ID there.
+          Your data lives on this device first — nothing here needs a connection. Whenever
+          you're online, it also backs up automatically and syncs across your phone, PC, or any
+          other device you open this on — no setup needed.
         </p>
-        <div className="mt-3 flex items-center gap-2">
-          <code className="flex-1 truncate rounded-lg border-[3px] border-border bg-bg px-3 py-2 font-body text-xs text-text">
-            {deviceId}
-          </code>
-          <button
-            type="button"
-            onClick={handleCopyId}
-            className="shrink-0 rounded-full border-[3px] border-border bg-surface px-3 py-2 font-display text-[10px] text-text"
-          >
-            {copied ? "COPIED" : "COPY"}
-          </button>
-        </div>
-        <div className="mt-3 flex items-center gap-2">
-          <input
-            type="text"
-            value={linkInput}
-            onChange={(e) => setLinkInput(e.target.value)}
-            placeholder="Paste a sync ID from another device"
-            className="min-w-0 flex-1 rounded-lg border-[3px] border-border bg-bg px-3 py-2 font-body text-xs text-text outline-none"
-          />
-          <button
-            type="button"
-            onClick={handleLinkDevice}
-            disabled={!linkInput.trim()}
-            className="shrink-0 rounded-full border-[3px] border-border bg-purple px-3 py-2 font-display text-[10px] text-white disabled:opacity-40"
-          >
-            LINK
-          </button>
-        </div>
       </Card>
 
       <Card className="mt-4 p-4">

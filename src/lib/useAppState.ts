@@ -5,14 +5,7 @@ import { findNewlyUnlocked, generateCustomMilestoneId } from "./milestones";
 import { createInitialState, loadState, saveState } from "./storage";
 import { currentStreak, getDayState, longestStreak, totalDaysLogged } from "./streak";
 import type { DayState } from "./streak";
-import {
-  adoptDeviceId,
-  fetchRemoteState,
-  getOrCreateDeviceId,
-  mergeStates,
-  pushRemoteState,
-  statesEqual,
-} from "./sync";
+import { fetchRemoteState, mergeStates, pushRemoteState, statesEqual } from "./sync";
 import type { AppState, Milestone } from "./types";
 import { FREEZE_BANK_CAP } from "./types";
 
@@ -23,7 +16,6 @@ export function useAppState() {
   const [today, setToday] = useState(() => todayStr());
   const [freezeToastOpen, setFreezeToastOpen] = useState(false);
   const [celebrationQueue, setCelebrationQueue] = useState<Milestone[]>([]);
-  const [deviceId, setDeviceId] = useState<string>(() => getOrCreateDeviceId());
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
 
   // Keep "today" fresh across a real midnight rollover in a long-lived tab.
@@ -88,20 +80,19 @@ export function useAppState() {
     canonicalStateRef.current = canonicalState;
   }, [canonicalState]);
 
-  // Gates the "push on change" effect until the initial pull+merge for this deviceId has
-  // finished, so a stale pre-merge write can never race ahead of it and clobber the remote.
+  // Gates the "push on change" effect until the initial pull+merge has finished, so a stale
+  // pre-merge write can never race ahead of it and clobber the remote.
   const hasInitialSyncedRef = useRef(false);
 
-  // Pull this device's remote blob, merge it into local (never destructive — union of
-  // check-ins and milestones), then push the merged result back up. Runs on mount and again
-  // whenever the user adopts a different sync id from Settings.
+  // Pull the shared blob (same one this app's other devices/browsers write to), merge it into
+  // local (never destructive — union of check-ins and milestones), then push the merged result
+  // back up. Runs once on mount.
   useEffect(() => {
     let cancelled = false;
-    hasInitialSyncedRef.current = false;
     setSyncStatus("syncing");
 
     (async () => {
-      const remote = await fetchRemoteState(deviceId);
+      const remote = await fetchRemoteState();
       if (cancelled) return;
 
       // What we push is a best-effort snapshot from just before this point — if the user
@@ -114,11 +105,16 @@ export function useAppState() {
           const merged = mergeStates(prev, remote);
           return statesEqual(prev, merged)
             ? prev
-            : { ...prev, checkIns: merged.checkIns, milestones: merged.milestones };
+            : {
+                ...prev,
+                checkIns: merged.checkIns,
+                milestones: merged.milestones,
+                deletedMilestoneIds: merged.deletedMilestoneIds,
+              };
         });
       }
 
-      const ok = await pushRemoteState(deviceId, toPush);
+      const ok = await pushRemoteState(toPush);
       if (cancelled) return;
       hasInitialSyncedRef.current = true;
       setSyncStatus(ok ? "synced" : "offline");
@@ -127,7 +123,7 @@ export function useAppState() {
     return () => {
       cancelled = true;
     };
-  }, [deviceId]);
+  }, []);
 
   // Push any subsequent local change up, debounced so a burst of updates (e.g. reconciling
   // several days at once) doesn't fire a request per change.
@@ -135,31 +131,24 @@ export function useAppState() {
     if (!hasInitialSyncedRef.current) return;
     const timer = setTimeout(() => {
       setSyncStatus("syncing");
-      pushRemoteState(deviceId, canonicalState).then((ok) => {
+      pushRemoteState(canonicalState).then((ok) => {
         setSyncStatus(ok ? "synced" : "offline");
       });
     }, 800);
     return () => clearTimeout(timer);
-  }, [canonicalState, deviceId]);
+  }, [canonicalState]);
 
   // Retry immediately when connectivity returns, rather than waiting for the next local change.
   useEffect(() => {
     function handleOnline() {
       if (!hasInitialSyncedRef.current) return;
       setSyncStatus("syncing");
-      pushRemoteState(deviceId, canonicalStateRef.current).then((ok) => {
+      pushRemoteState(canonicalStateRef.current).then((ok) => {
         setSyncStatus(ok ? "synced" : "offline");
       });
     }
     window.addEventListener("online", handleOnline);
     return () => window.removeEventListener("online", handleOnline);
-  }, [deviceId]);
-
-  const setSyncDeviceId = useCallback((id: string) => {
-    const trimmed = id.trim();
-    if (!trimmed) return;
-    adoptDeviceId(trimmed);
-    setDeviceId(trimmed);
   }, []);
 
   // Surface a one-time toast whenever the freeze bank increases after the initial load.
@@ -222,29 +211,35 @@ export function useAppState() {
     [currentStreakDays],
   );
 
-  const editCustomReward = useCallback(
-    (id: string, updates: { days?: number; title?: string; note?: string }) => {
-      setState((prev) => ({
-        ...prev,
-        milestones: prev.milestones.map((m) =>
-          m.id === id && m.source === "custom"
-            ? {
-                ...m,
-                days: updates.days ?? m.days,
-                label: updates.title ?? m.label,
-                note: updates.note ?? m.note,
-              }
-            : m,
-        ),
-      }));
-    },
-    [],
-  );
-
-  const deleteCustomReward = useCallback((id: string) => {
+  // Built-in or custom — every reward is editable, since this is a single-user app and the
+  // ladder is entirely the user's own to tune. updatedAt lets multi-device sync know this edit
+  // should win over whatever an unedited (or older-edited) copy elsewhere still has.
+  const editReward = useCallback((id: string, updates: { days?: number; title?: string; note?: string }) => {
     setState((prev) => ({
       ...prev,
-      milestones: prev.milestones.filter((m) => !(m.id === id && m.source === "custom")),
+      milestones: prev.milestones.map((m) =>
+        m.id === id
+          ? {
+              ...m,
+              days: updates.days ?? m.days,
+              label: updates.title ?? m.label,
+              note: updates.note ?? m.note,
+              updatedAt: new Date().toISOString(),
+            }
+          : m,
+      ),
+    }));
+  }, []);
+
+  // Deletion is a tombstone, not just a filter — otherwise syncing with a device that still has
+  // an older, pre-deletion copy would resurrect it.
+  const deleteReward = useCallback((id: string) => {
+    setState((prev) => ({
+      ...prev,
+      milestones: prev.milestones.filter((m) => m.id !== id),
+      deletedMilestoneIds: prev.deletedMilestoneIds.includes(id)
+        ? prev.deletedMilestoneIds
+        : [...prev.deletedMilestoneIds, id],
     }));
   }, []);
 
@@ -305,14 +300,12 @@ export function useAppState() {
     dismissCelebration,
     markTodayDone,
     addCustomReward,
-    editCustomReward,
-    deleteCustomReward,
+    editReward,
+    deleteReward,
     setTheme,
     exportData,
     importData,
     resetData,
-    deviceId,
     syncStatus,
-    setSyncDeviceId,
   };
 }

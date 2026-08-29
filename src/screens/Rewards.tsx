@@ -98,7 +98,6 @@ function MilestoneRow({
   onDelete: () => void;
 }) {
   const unlocked = Boolean(milestone.unlockedAt);
-  const isCustom = milestone.source === "custom";
 
   if (isEditing) {
     return (
@@ -123,7 +122,9 @@ function MilestoneRow({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate font-display text-sm text-text">{milestone.label}</p>
+        <p className="truncate font-display text-sm text-text">
+          {milestone.label} {unlocked && <span className="text-base">✓</span>}
+        </p>
         <p className="font-body text-xs font-semibold text-text-muted">
           {milestone.days} days {unlocked ? "· unlocked" : "· locked"}
         </p>
@@ -131,27 +132,24 @@ function MilestoneRow({
           <p className="mt-0.5 truncate font-body text-xs text-text-muted">{milestone.note}</p>
         )}
       </div>
-      {unlocked && <span className="shrink-0 text-lg">✓</span>}
-      {isCustom && (
-        <div className="flex shrink-0 flex-col gap-1">
-          <button
-            type="button"
-            onClick={onStartEdit}
-            aria-label={`Edit ${milestone.label}`}
-            className="rounded-full border-2 border-border bg-surface px-2 py-0.5 font-body text-[10px] font-bold"
-          >
-            EDIT
-          </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            aria-label={`Delete ${milestone.label}`}
-            className="rounded-full border-2 border-border bg-surface px-2 py-0.5 font-body text-[10px] font-bold text-red"
-          >
-            DEL
-          </button>
-        </div>
-      )}
+      <div className="flex shrink-0 flex-col gap-1">
+        <button
+          type="button"
+          onClick={onStartEdit}
+          aria-label={`Edit ${milestone.label}`}
+          className="rounded-full border-2 border-border bg-surface px-2 py-0.5 font-body text-[10px] font-bold"
+        >
+          EDIT
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label={`Delete ${milestone.label}`}
+          className="rounded-full border-2 border-border bg-surface px-2 py-0.5 font-body text-[10px] font-bold text-red"
+        >
+          DEL
+        </button>
+      </div>
     </Card>
   );
 }

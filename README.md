@@ -2,21 +2,20 @@
 
 A dead-simple gym habit tracker. Open the app, tap one big button to mark today's workout done. Everything else — streaks, streak-freezes, milestones — wraps around that single action.
 
-No workout logging, no sets/reps, no exercise library, no accounts. No login either — see **Sync** below for how data still gets backed up and can follow you across devices.
+No workout logging, no sets/reps, no exercise library, no accounts. This build is intentionally single-user (see **Sync** below) — every device that opens it shares the same data automatically.
 
 ## Stack
 
 React + TypeScript + Vite, Tailwind CSS, `date-fns`, `vite-plugin-pwa`.
 
-State is local component state + `localStorage` via a custom hook (`src/lib/useAppState.ts`) — this stays the source of truth and is what makes the app work fully offline. On top of that, `src/lib/sync.ts` backs the same state up to [Netlify Blobs](https://docs.netlify.com/build/data-and-storage/netlify-blobs/) through a Netlify Function (`netlify/functions/sync.mts`), so a cleared cache or a second device isn't necessarily the end of a streak.
+State is local component state + `localStorage` via a custom hook (`src/lib/useAppState.ts`) — this stays the source of truth and is what makes the app work fully offline. On top of that, `src/lib/sync.ts` backs the same state up to [Netlify Blobs](https://docs.netlify.com/build/data-and-storage/netlify-blobs/) through a Netlify Function (`netlify/functions/sync.mts`), so you can check in from your phone at the gym and see it reflected on your PC later, or the other way around.
 
 ### How sync works
 
-- On first load, the app generates a random device ID (`localStorage`, key `kratos:device-id`) — there's no login, so this ID is what a blob is filed under.
-- Whenever online, local state is pushed to `/api/sync?deviceId=...` (debounced) and pulled + merged on load. The merge is additive only — check-ins union by date, milestones union by id — so syncing can never lose data on either side.
-- To carry a streak to another device: open **Settings** on the original device, copy the **Sync ID**, and paste it into **Settings → Link** on the other device. Both devices now read/write the same blob.
-- This is a convenience, not durability: the device ID itself lives in `localStorage`, so clearing that on every device that knows it does lose access to the blob. Export/Import (also in Settings) remains the belt-and-suspenders backup.
-- The sync endpoint is intentionally unauthenticated (no accounts, by design) — it validates shape and caps payload size, but anyone who guesses or brute-forces a device ID could read or overwrite that blob. Treat the device ID like a share link, not a password.
+- There's no login and this is built for one person, so every device reads/writes the *same* fixed blob (the id is a constant in `src/lib/sync.ts`) — open the app on a new device and it's already synced, no pairing step.
+- Whenever online, local state is pushed (debounced) and pulled + merged on load. The merge never loses data: check-ins union by date; a reward you edited or deleted anywhere wins over a stale copy elsewhere (each edit is timestamped, and deletions are permanent tombstones so a sync can't resurrect something you removed).
+- Since it's a single fixed id rather than a per-user secret, treat the deployed URL itself as the access boundary — anyone who can reach `/api/sync` on your deployment can read or overwrite your data. Fine for a private/personal deployment; don't make this build public without adding real auth.
+- Sync is a convenience layer on top of localStorage, not a replacement for backups — Export/Import in Settings remains the belt-and-suspenders option (e.g. before clearing all site data on every device at once).
 
 ## Develop
 

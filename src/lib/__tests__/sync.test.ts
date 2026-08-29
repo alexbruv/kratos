@@ -6,6 +6,7 @@ function state(overrides: Partial<AppState> = {}): AppState {
   return {
     checkIns: [],
     milestones: [],
+    deletedMilestoneIds: [],
     freezeBank: 0,
     freezeUsedDates: [],
     theme: "light",
@@ -66,7 +67,7 @@ describe("mergeStates", () => {
     );
   });
 
-  it("prefers local's descriptive fields when both sides have edited the same custom reward", () => {
+  it("prefers local's descriptive fields as a tiebreak when neither side has an edit timestamp", () => {
     const local = state({
       milestones: [{ id: "custom-1", days: 730, label: "Bali trip (edited)", source: "custom" }],
     });
@@ -75,6 +76,79 @@ describe("mergeStates", () => {
     });
     const merged = mergeStates(local, remote);
     expect(merged.milestones.find((m) => m.id === "custom-1")?.label).toBe("Bali trip (edited)");
+  });
+
+  it("prefers remote's edit over local's untouched seed default — the bug a brand-new device would hit otherwise", () => {
+    // local is a freshly-seeded builtin ladder (no updatedAt); remote has a real edit from
+    // another device. Without timestamp-aware merging, local's stale default would win here.
+    const local = state({
+      milestones: [{ id: "d3", days: 3, label: "FIRST SPARK", source: "builtin" }],
+    });
+    const remote = state({
+      milestones: [
+        {
+          id: "d3",
+          days: 3,
+          label: "FIRST SPARK (edited)",
+          source: "builtin",
+          updatedAt: "2026-08-01T00:00:00.000Z",
+        },
+      ],
+    });
+    const merged = mergeStates(local, remote);
+    expect(merged.milestones.find((m) => m.id === "d3")?.label).toBe("FIRST SPARK (edited)");
+  });
+
+  it("prefers the more recently edited side when both have edited the same milestone", () => {
+    const local = state({
+      milestones: [
+        {
+          id: "d3",
+          days: 3,
+          label: "local edit",
+          source: "builtin",
+          updatedAt: "2026-08-05T00:00:00.000Z",
+        },
+      ],
+    });
+    const remote = state({
+      milestones: [
+        {
+          id: "d3",
+          days: 3,
+          label: "remote edit",
+          source: "builtin",
+          updatedAt: "2026-08-01T00:00:00.000Z",
+        },
+      ],
+    });
+    expect(mergeStates(local, remote).milestones.find((m) => m.id === "d3")?.label).toBe(
+      "local edit",
+    );
+    expect(mergeStates(remote, local).milestones.find((m) => m.id === "d3")?.label).toBe(
+      "local edit",
+    );
+  });
+
+  it("keeps a milestone deleted on one side out of the merge, even if the other side still has it", () => {
+    const local = state({
+      milestones: [{ id: "d3", days: 3, label: "FIRST SPARK", source: "builtin" }],
+      deletedMilestoneIds: [],
+    });
+    const remote = state({
+      milestones: [],
+      deletedMilestoneIds: ["d3"],
+    });
+    const merged = mergeStates(local, remote);
+    expect(merged.milestones.some((m) => m.id === "d3")).toBe(false);
+    expect(merged.deletedMilestoneIds).toEqual(["d3"]);
+  });
+
+  it("unions tombstones from both sides", () => {
+    const local = state({ deletedMilestoneIds: ["d3"] });
+    const remote = state({ deletedMilestoneIds: ["d7"] });
+    const merged = mergeStates(local, remote);
+    expect(new Set(merged.deletedMilestoneIds)).toEqual(new Set(["d3", "d7"]));
   });
 
   it("keeps local's theme regardless of remote", () => {
@@ -106,6 +180,20 @@ describe("statesEqual", () => {
         { id: "d7", days: 7, label: "WEEK ONE", source: "builtin", unlockedAt: "2026-08-01T00:00:00.000Z" },
       ],
     });
+    expect(statesEqual(a, b)).toBe(false);
+  });
+
+  it("is false when a milestone's label differs", () => {
+    const a = state({ milestones: [{ id: "d3", days: 3, label: "FIRST SPARK", source: "builtin" }] });
+    const b = state({
+      milestones: [{ id: "d3", days: 3, label: "FIRST SPARK (edited)", source: "builtin" }],
+    });
+    expect(statesEqual(a, b)).toBe(false);
+  });
+
+  it("is false when tombstones differ", () => {
+    const a = state({ deletedMilestoneIds: [] });
+    const b = state({ deletedMilestoneIds: ["d3"] });
     expect(statesEqual(a, b)).toBe(false);
   });
 });

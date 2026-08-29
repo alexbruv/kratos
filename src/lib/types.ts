@@ -12,11 +12,13 @@ export interface Milestone {
   source: MilestoneSource;
   badgeIcon?: string; // ref to a preset icon; omitted for custom (use placeholder style)
   unlockedAt?: string; // ISO timestamp, set once achieved — never re-triggers
+  updatedAt?: string; // ISO timestamp of the last edit — lets multi-device sync pick the newer edit
 }
 
 export interface AppState {
   checkIns: CheckIn[]; // append-only log of completed days
   milestones: Milestone[]; // built-in (seeded once) + custom, merged
+  deletedMilestoneIds: string[]; // tombstones — deletion is permanent and wins over any sync
   freezeBank: number; // available freeze days, capped (default max 4)
   freezeUsedDates: string[]; // dates where a freeze was auto-applied instead of a real check-in
   lastEvaluatedWeek?: string; // ISO week id, prevents double-awarding a perfect week
