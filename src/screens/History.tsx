@@ -1,11 +1,11 @@
-import { lastNMonths } from "../lib/dates";
+import { lastNMonths, monthsBetween } from "../lib/dates";
 import { monthlyRecap } from "../lib/stats";
 import type { DayState } from "../lib/streak";
 import { Card } from "../components/Card";
 import { MonthGrid } from "../components/MonthGrid";
 import { MemphisConfetti } from "../components/MemphisConfetti";
 
-const MONTHS_SHOWN = 6;
+const MIN_MONTHS_SHOWN = 6;
 
 export function History({
   today,
@@ -22,7 +22,11 @@ export function History({
   const earliestCheckIn = checkInDates.size
     ? [...checkInDates].reduce((a, b) => (b < a ? b : a))
     : undefined;
-  const months = lastNMonths(today, MONTHS_SHOWN);
+  // Current month first, scrolling down goes further back — as far back as there's history for.
+  const monthsShown = earliestCheckIn
+    ? Math.max(MIN_MONTHS_SHOWN, monthsBetween(earliestCheckIn, today) + 1)
+    : MIN_MONTHS_SHOWN;
+  const months = [...lastNMonths(today, monthsShown)].reverse();
 
   return (
     <div className="relative min-h-[100dvh] overflow-hidden px-5 pb-28 pt-6">

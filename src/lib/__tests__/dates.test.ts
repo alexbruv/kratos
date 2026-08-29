@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { addDaysStr, mondayOfWeek, sundayOfWeek, weekDates, weekIdForDate } from "../dates";
+import {
+  addDaysStr,
+  lastNMonths,
+  mondayOfWeek,
+  monthsBetween,
+  sundayOfWeek,
+  weekDates,
+  weekIdForDate,
+} from "../dates";
 
 describe("dates", () => {
   it("addDaysStr adds and subtracts whole days across month/year boundaries", () => {
@@ -34,5 +42,18 @@ describe("dates", () => {
     expect(weekIdForDate("2026-08-26")).toBe(id);
     expect(weekIdForDate("2026-08-30")).toBe(id);
     expect(weekIdForDate("2026-08-31")).not.toBe(id);
+  });
+
+  it("monthsBetween counts whole calendar months regardless of day-of-month", () => {
+    expect(monthsBetween("2026-08-28", "2026-08-01")).toBe(0);
+    expect(monthsBetween("2026-08-28", "2026-09-01")).toBe(1);
+    expect(monthsBetween("2026-01-15", "2026-08-01")).toBe(7);
+    expect(monthsBetween("2025-08-28", "2026-08-28")).toBe(12);
+  });
+
+  it("lastNMonths returns oldest-first, reversing gives current-month-first for the history view", () => {
+    const months = lastNMonths("2026-08-28", 3);
+    expect(months).toEqual(["2026-06-28", "2026-07-28", "2026-08-28"]);
+    expect([...months].reverse()).toEqual(["2026-08-28", "2026-07-28", "2026-06-28"]);
   });
 });

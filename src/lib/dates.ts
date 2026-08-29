@@ -2,6 +2,7 @@ import {
   addDays,
   addMonths,
   differenceInCalendarDays,
+  differenceInCalendarMonths,
   eachDayOfInterval,
   endOfMonth,
   endOfWeek,
@@ -97,4 +98,9 @@ export function lastNMonths(dateStr: string, count: number): string[] {
   return Array.from({ length: count }, (_, i) =>
     toDateStr(addMonths(date, i - (count - 1))),
   );
+}
+
+/** Whole calendar months between two dates (e.g. same month = 0, one month apart = 1). */
+export function monthsBetween(fromDateStrVal: string, toDateStrVal: string): number {
+  return differenceInCalendarMonths(fromDateStr(toDateStrVal), fromDateStr(fromDateStrVal));
 }
